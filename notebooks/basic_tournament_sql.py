@@ -186,8 +186,7 @@ def push_to_sql(sport: Sport, category: Category, tournament: Tournament):
             existing_tournament.category_id = tournament.category_id
             existing_tournament.updated_at = datetime.now()
             print(f"Updated tournament: {tournament.name}")
-
-    session.commit()
+        session.commit()
 
 
 ########################################
@@ -214,6 +213,6 @@ if __name__ == "__main__":
     engine = create_engine(DATABASE_URL)
     SQLModel.metadata.create_all(engine)
 
-    sport, category, tournament = convert_tournamet_to_sqlmodel(tournament_data[0].data)
-
-    push_to_sql(sport, category, tournament)
+    for t in tournament_data:
+        sport, category, tournament = convert_tournamet_to_sqlmodel(t.data)
+        push_to_sql(sport, category, tournament)
