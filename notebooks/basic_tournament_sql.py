@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import sofascrape.schemas.general as pydanticschema
+import sofascrape.schemas.general as pydanticschema  # type: ignore
 from sofascrape.general import TournamentProcessScraper  # type: ignore
 from sqlmodel import (  # type: ignore
     Field,
