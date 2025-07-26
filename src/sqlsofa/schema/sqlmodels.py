@@ -925,10 +925,16 @@ class MatchScrapingResult(SQLModel, table=True):  # type: ignore
 
     # Foreign keys
     event_id: Optional[int] = Field(default=None, foreign_key="events.id")
+    season_scraping_result_id: Optional[int] = Field(
+        default=None, foreign_key="season_scraping_results.id"
+    )
 
     # Relationships
     event: Optional[Event] = Relationship()
     component_errors: List[ComponentError] = Relationship(back_populates="match_result")
+    season_scraping_result: Optional["SeasonScrapingResult"] = Relationship(
+        back_populates="match_results"
+    )
 
 
 class SeasonScrapingResult(SQLModel, table=True):  # type: ignore
@@ -951,7 +957,9 @@ class SeasonScrapingResult(SQLModel, table=True):  # type: ignore
     # Relationships
     tournament: Optional[Tournament] = Relationship()
     season: Optional[Season] = Relationship()
-    match_results: List[MatchScrapingResult] = Relationship()
+    match_results: List[MatchScrapingResult] = Relationship(
+        back_populates="season_scraping_result"
+    )
 
 
 # Create all tables function

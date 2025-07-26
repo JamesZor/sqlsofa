@@ -1,0 +1,23 @@
+import json
+
+import pytest  # type: ignore
+import sofascrape.schemas.general as sofaschemas
+from sofascrape.utils import NoteBookType, NotebookUtils  # type: ignore
+
+from sqlsofa.general import TournamentComponentConverter  # Fixed: added missing 'r'
+
+
+@pytest.fixture
+def example_data():
+    nbu = NotebookUtils(type=NoteBookType.GENERAL, web_on=False)
+    raw_data = nbu.load(file_name="tournament_1")
+    return sofaschemas.TournamentData.model_validate(raw_data)
+
+
+def test_basic_setup(example_data):
+    tournamentConveter = TournamentComponentConverter()
+    tournamentConveter.convert(example_data)
+
+    if tournamentConveter.raw_data:
+        for x in tournamentConveter.raw_data:
+            print(repr(x))
