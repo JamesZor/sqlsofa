@@ -62,9 +62,8 @@ class TournamentComponentConverter(BaseComponenetConverter):
         category = self._convert_category(t)
         tournament = self._convert_tournament(t)
 
-        self.raw_data = [sport, category, tournament]
+        self.data = [sport, category, tournament]
 
     def normilise(self) -> None:
         """trivial here"""
-
-        self.data = set(self.raw_data)
+        pass

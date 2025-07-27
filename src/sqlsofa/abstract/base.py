@@ -17,8 +17,7 @@ class BaseComponenetConverter:
     """Converts basic event data - can run standalone"""
 
     def __init__(self) -> None:
-        self.raw_data: List[SQLModel] = []
-        self.data: Set[SQLModel] = set()
+        self.data: List[SQLModel] = []
 
     @abstractmethod
     def convert(self, pydantic_data: BaseModel) -> None:
