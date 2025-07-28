@@ -1,15 +1,70 @@
+import logging
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional, Tuple
 
 from sqlmodel import Field, Relationship, SQLModel
 
+logger = logging.getLogger(__name__)
+
+
 ##############################
-# Base/Core Entities
+# abstract
+##############################
+class HashSlugBaseSQLModel(SQLModel):
+    def __hash__(self) -> int:
+        return hash(self.slug)
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, type(self)):
+            return self.slug == other.slug
+        return False
+
+
+class HashIdNameBaseSQLModel(SQLModel):
+    def __hash__(self) -> int:
+        return hash((self.id, self.name))
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, type(self)):
+            return self.id == other.id and self.name == other.name
+        return False
+
+
+class HashBaseSQLModel(SQLModel):
+    _hash_attrs: List[str] = ["id", "name", "slug", "year"]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Cache the hash attributes once during initialization
+        self._cached_hash_tuple = self._get_hash_tuple()
+
+    def _get_hash_tuple(self) -> Tuple[Any, ...]:
+        """Get tuple of values from attributes that exist on this instance"""
+        hash_values = []
+        for attr in self._hash_attrs:
+            if hasattr(self, attr):
+                value = getattr(self, attr)
+                # Only include non-None values (optional - you might want None values)
+                if value is not None:
+                    hash_values.append(value)
+        return tuple(hash_values)
+
+    def __hash__(self) -> int:
+        return hash(self._cached_hash_tuple)
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, type(self)):
+            return self._cached_hash_tuple == other._cached_hash_tuple
+        return False
+
+
+##############################
+# base/core entities
 ##############################
 
 
-class Sport(SQLModel, table=True):  # type: ignore
+class Sport(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "sports"
 
     id: int = Field(primary_key=True)
@@ -23,7 +78,7 @@ class Sport(SQLModel, table=True):  # type: ignore
     referees: List["Referee"] = Relationship(back_populates="sport")
 
 
-class Country(SQLModel, table=True):  # type: ignore
+class Country(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "countries"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -41,7 +96,7 @@ class Country(SQLModel, table=True):  # type: ignore
     players: List["LineupPlayer"] = Relationship(back_populates="country")
 
 
-class Category(SQLModel, table=True):  # type: ignore
+class Category(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "categories"
 
     id: int = Field(primary_key=True)
@@ -57,7 +112,7 @@ class Category(SQLModel, table=True):  # type: ignore
     tournaments: List["Tournament"] = Relationship(back_populates="category")
 
 
-class Tournament(SQLModel, table=True):  # type: ignore
+class Tournament(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "tournaments"
 
     id: int = Field(primary_key=True)
@@ -74,7 +129,7 @@ class Tournament(SQLModel, table=True):  # type: ignore
     events: List["Event"] = Relationship(back_populates="tournament")
 
 
-class Season(SQLModel, table=True):  # type: ignore
+class Season(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "seasons"
 
     id: int = Field(primary_key=True)
@@ -91,7 +146,7 @@ class Season(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class City(SQLModel, table=True):  # type: ignore
+class City(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "cities"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -102,7 +157,7 @@ class City(SQLModel, table=True):  # type: ignore
     venues: List["Venue"] = Relationship(back_populates="city")
 
 
-class Stadium(SQLModel, table=True):  # type: ignore
+class Stadium(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "stadiums"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -114,7 +169,7 @@ class Stadium(SQLModel, table=True):  # type: ignore
     venues: List["Venue"] = Relationship(back_populates="stadium")
 
 
-class VenueCoordinates(SQLModel, table=True):  # type: ignore
+class VenueCoordinates(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "venue_coordinates"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -126,7 +181,7 @@ class VenueCoordinates(SQLModel, table=True):  # type: ignore
     venues: List["Venue"] = Relationship(back_populates="venue_coordinates")
 
 
-class Venue(SQLModel, table=True):  # type: ignore
+class Venue(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "venues"
 
     id: int = Field(primary_key=True)
@@ -159,7 +214,7 @@ class Venue(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class TeamColors(SQLModel, table=True):  # type: ignore
+class TeamColors(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "team_colors"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -172,7 +227,7 @@ class TeamColors(SQLModel, table=True):  # type: ignore
     teams: List["Team"] = Relationship(back_populates="team_colors")
 
 
-class Manager(SQLModel, table=True):  # type: ignore
+class Manager(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "managers"
 
     id: int = Field(primary_key=True)
@@ -189,7 +244,7 @@ class Manager(SQLModel, table=True):  # type: ignore
     teams: List["Team"] = Relationship(back_populates="manager")
 
 
-class Team(SQLModel, table=True):  # type: ignore
+class Team(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "teams"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -226,7 +281,7 @@ class Team(SQLModel, table=True):  # type: ignore
     team_lineups: List["TeamLineup"] = Relationship(back_populates="team")
 
 
-class LineupPlayer(SQLModel, table=True):  # type: ignore
+class LineupPlayer(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "lineup_players"
 
     id: int = Field(primary_key=True)
@@ -280,7 +335,7 @@ class LineupPlayer(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class Status(SQLModel, table=True):  # type: ignore
+class Status(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "statuses"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -293,7 +348,7 @@ class Status(SQLModel, table=True):  # type: ignore
     events: List["Event"] = Relationship(back_populates="status")
 
 
-class TimeFootball(SQLModel, table=True):  # type: ignore
+class TimeFootball(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "time_football"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -306,7 +361,7 @@ class TimeFootball(SQLModel, table=True):  # type: ignore
     events: List["Event"] = Relationship(back_populates="time")
 
 
-class Score(SQLModel, table=True):  # type: ignore
+class Score(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "scores"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -328,7 +383,7 @@ class Score(SQLModel, table=True):  # type: ignore
     )
 
 
-class RoundInfo(SQLModel, table=True):  # type: ignore
+class RoundInfo(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "round_info"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -339,7 +394,7 @@ class RoundInfo(SQLModel, table=True):  # type: ignore
     events: List["Event"] = Relationship(back_populates="round_info")
 
 
-class Referee(SQLModel, table=True):  # type: ignore
+class Referee(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "referees"
 
     id: int = Field(primary_key=True)
@@ -366,7 +421,7 @@ class Referee(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class Event(SQLModel, table=True):  # type: ignore
+class Event(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "events"
 
     id: int = Field(primary_key=True)
@@ -439,7 +494,7 @@ class Event(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class PlayerStatistics(SQLModel, table=True):  # type: ignore
+class PlayerStatistics(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "player_statistics"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -506,7 +561,7 @@ class PlayerStatistics(SQLModel, table=True):  # type: ignore
     )
 
 
-class LineupPlayerEntry(SQLModel, table=True):  # type: ignore
+class LineupPlayerEntry(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "lineup_player_entries"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -534,7 +589,7 @@ class LineupPlayerEntry(SQLModel, table=True):  # type: ignore
     team_lineup: Optional["TeamLineup"] = Relationship(back_populates="players")
 
 
-class PlayerColor(SQLModel, table=True):  # type: ignore
+class PlayerColor(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "player_colors"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -555,7 +610,7 @@ class PlayerColor(SQLModel, table=True):  # type: ignore
     )
 
 
-class TeamLineup(SQLModel, table=True):  # type: ignore
+class TeamLineup(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "team_lineups"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -587,7 +642,7 @@ class TeamLineup(SQLModel, table=True):  # type: ignore
     players: List[LineupPlayerEntry] = Relationship(back_populates="team_lineup")
 
 
-class FootballLineup(SQLModel, table=True):  # type: ignore
+class FootballLineup(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "football_lineups"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -607,7 +662,7 @@ class FootballLineup(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class FootballStatisticItem(SQLModel, table=True):  # type: ignore
+class FootballStatisticItem(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "football_statistic_items"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -636,7 +691,7 @@ class FootballStatisticItem(SQLModel, table=True):  # type: ignore
     )
 
 
-class StatisticGroup(SQLModel, table=True):  # type: ignore
+class StatisticGroup(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "statistic_groups"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -657,7 +712,7 @@ class StatisticGroup(SQLModel, table=True):  # type: ignore
     )
 
 
-class FootballStatisticPeriod(SQLModel, table=True):  # type: ignore
+class FootballStatisticPeriod(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "football_statistic_periods"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -677,7 +732,7 @@ class FootballStatisticPeriod(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class Coordinates(SQLModel, table=True):  # type: ignore
+class Coordinates(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "coordinates"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -686,7 +741,7 @@ class Coordinates(SQLModel, table=True):  # type: ignore
     created_at: datetime = Field(default_factory=datetime.now)
 
 
-class Incident(SQLModel, table=True):  # type: ignore
+class Incident(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "incidents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -709,7 +764,7 @@ class Incident(SQLModel, table=True):  # type: ignore
 
 
 # Specific incident types (inheriting from Incident concept)
-class GoalIncident(SQLModel, table=True):  # type: ignore
+class GoalIncident(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "goal_incidents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -747,7 +802,7 @@ class GoalIncident(SQLModel, table=True):  # type: ignore
     )
 
 
-class CardIncident(SQLModel, table=True):  # type: ignore
+class CardIncident(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "card_incidents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -769,7 +824,7 @@ class CardIncident(SQLModel, table=True):  # type: ignore
     player: Optional[LineupPlayer] = Relationship(back_populates="card_incidents")
 
 
-class SubstitutionIncident(SQLModel, table=True):  # type: ignore
+class SubstitutionIncident(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "substitution_incidents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -798,7 +853,7 @@ class SubstitutionIncident(SQLModel, table=True):  # type: ignore
     )
 
 
-class PeriodIncident(SQLModel, table=True):  # type: ignore
+class PeriodIncident(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "period_incidents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -821,7 +876,7 @@ class PeriodIncident(SQLModel, table=True):  # type: ignore
     event: Optional[Event] = Relationship()
 
 
-class InjuryTimeIncident(SQLModel, table=True):  # type: ignore
+class InjuryTimeIncident(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "injury_time_incidents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -838,7 +893,7 @@ class InjuryTimeIncident(SQLModel, table=True):  # type: ignore
     event: Optional[Event] = Relationship()
 
 
-class VarDecisionIncident(SQLModel, table=True):  # type: ignore
+class VarDecisionIncident(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "var_decision_incidents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -865,7 +920,8 @@ class VarDecisionIncident(SQLModel, table=True):  # type: ignore
 ##############################
 
 
-class GraphPoint(SQLModel, table=True):  # type: ignore
+class GraphPoint(HashBaseSQLModel, table=True):  # type: ignore
+    _hash_attrs = ["id", "minute"]
     __tablename__ = "graph_points"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -891,7 +947,7 @@ class ComponentStatusEnum(str, Enum):  # type: ignore
     NOT_ATTEMPTED = "not_attempted"
 
 
-class ComponentError(SQLModel, table=True):  # type: ignore
+class ComponentError(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "component_errors"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -912,7 +968,7 @@ class ComponentError(SQLModel, table=True):  # type: ignore
     )
 
 
-class MatchScrapingResult(SQLModel, table=True):  # type: ignore
+class MatchScrapingResult(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "match_scraping_results"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -937,7 +993,7 @@ class MatchScrapingResult(SQLModel, table=True):  # type: ignore
     )
 
 
-class SeasonScrapingResult(SQLModel, table=True):  # type: ignore
+class SeasonScrapingResult(HashBaseSQLModel, table=True):  # type: ignore
     __tablename__ = "season_scraping_results"
 
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -29,6 +29,22 @@ def seasonsList() -> sofaschemas.SeasonsListSchema:
     return sofaschemas.SeasonsListSchema.model_validate(raw_data)
 
 
+## football
+# base
+@pytest.fixture
+def footballBaseMatchEvent() -> sofaschemas.FootballDetailsSchema:
+    nbu = NotebookUtils(type=NoteBookType.FOOTBALL, web_on=False)
+    raw_data = nbu.load(file_name="football_base_match_12436870")
+    return sofaschemas.FootballDetailsSchema.model_validate(raw_data)
+
+
+@pytest.fixture
+def footballMatchStatistics() -> sofaschemas.FootballStatsSchema:
+    nbu = NotebookUtils(type=NoteBookType.FOOTBALL, web_on=False)
+    raw_data = nbu.load(file_name="football_stats_12436870")
+    return sofaschemas.FootballStatsSchema.model_validate(raw_data)
+
+
 def test_tournament(tournamentData):
     print("")
     print("=" * 30)
@@ -60,3 +76,41 @@ def test_events(eventsListData):
 
         print(".." * 10)
         pprint.pprint(e, indent=4, width=120)  # Much more readable!
+
+
+def test_events_sets(eventsListData):
+    print("")
+    print("=" * 30)
+    events_sql = [converter.event(event=event) for event in eventsListData.events]
+    print("+" * 30)
+    sports = [event.get("sport") for event in events_sql]
+    print(f"{len(sports)=}, {sports[0:3] =}")
+    sports_set = set(sports)
+    print(f"{len(sports_set)= }")
+    print("+" * 30)
+    hometeam = [event.get("home_team") for event in events_sql]
+    awayteam = [event.get("away_team") for event in events_sql]
+    teams = hometeam + awayteam
+    print(f"{len(teams)=}, {teams[0:3] =}")
+    teams_set = set(teams)
+    print(f"{len(teams_set)= }")
+
+
+def test_football_match_event(footballBaseMatchEvent):
+    print("")
+    print("=" * 30)
+    print(footballBaseMatchEvent.model_dump_json(indent=8))
+
+    print("+" * 30)
+    football_event_results = converter.FootballEventResult(footballBaseMatchEvent.event)
+    pprint.pprint(football_event_results, indent=8, width=100)
+
+
+def test_football_statistics(footballMatchStatistics):
+    print("")
+    print("=" * 30)
+    print(footballMatchStatistics.model_dump_json(indent=8))
+
+    print("+" * 30)
+    stats_results = converter.football_stats(footballMatchStatistics)
+    pprint.pprint(stats_results, indent=8, width=100)
