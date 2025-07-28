@@ -27,6 +27,15 @@ class EventFootballComponentConverter(BaseComponenetConverter):
                 competitionType=t.competitionType,
             )
 
+        def _team_extractor(self, t: sofaschema.FootballTeamSchema) -> sqlschema.Team:
+            pass
+
+        def _convert_team(
+            self, event: sofaschema.FootballEventSchema
+        ) -> sqlschema.Tournament:
+            h = event.homeTeam
+            a = event.awayTeam
+
         def convert(self, pydantic_data: sofaschema.FootballDetailsSchema) -> None:
 
             try:
@@ -41,3 +50,6 @@ class EventFootballComponentConverter(BaseComponenetConverter):
                         indent=2,
                     )
                 )
+
+            tournament = self._convert_tournament(event)
+            self.raw_data = tournament
