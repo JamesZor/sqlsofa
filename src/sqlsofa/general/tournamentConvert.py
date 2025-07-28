@@ -18,28 +18,19 @@ class TournamentComponentConverter(BaseComponenetConverter):
         super().__init__()
 
     def _convert_sport(self, t: pydanticschema.TournamentSchema) -> sqlschema.Sport:
-        return sqlschema.Sport(
-            id=t.category.sport.id,
-            name=t.category.sport.name,
-            slug=t.category.sport.slug,
-        )
+        sport: pydanticschema.SportSchema = t.category.sport
+        return sqlschema.Sport(**sport.to_sql_dict())
 
     def _convert_category(
         self, t: pydanticschema.TournamentSchema
     ) -> sqlschema.Category:
-        return sqlschema.Category(
-            id=t.category.id,
-            name=t.category.name,
-            slug=t.category.slug,
-            sport_id=t.category.sport.id,
-        )
+        category: pydanticschema.CategorySchema = t.category
+        return sqlschema.Category(**category.to_sql_dict())
 
     def _convert_tournament(
         self, t: pydanticschema.TournamentSchema
     ) -> sqlschema.Tournament:
-        return sqlschema.Tournament(
-            id=t.id, name=t.name, slug=t.slug, category_id=t.category.id
-        )
+        return sqlschema.Tournament(**t.to_sql_dict())
 
     def convert(self, pydantic_data: pydanticschema.TournamentData) -> None:
 

@@ -8,7 +8,7 @@ from sqlsofa.general import TournamentComponentConverter  # Fixed: added missing
 
 
 @pytest.fixture
-def example_data():
+def example_data() -> sofaschemas.TournamentData:
     nbu = NotebookUtils(type=NoteBookType.GENERAL, web_on=False)
     raw_data = nbu.load(file_name="tournament_1")
     return sofaschemas.TournamentData.model_validate(raw_data)
@@ -18,6 +18,10 @@ def test_basic_setup(example_data):
     tournamentConveter = TournamentComponentConverter()
     tournamentConveter.convert(example_data)
 
-    if tournamentConveter.raw_data:
-        for x in tournamentConveter.raw_data:
+    print("")
+    print("=" * 30)
+    print(example_data.model_dump_json(indent=6))
+
+    if tournamentConveter.data:
+        for x in tournamentConveter.data:
             print(repr(x))

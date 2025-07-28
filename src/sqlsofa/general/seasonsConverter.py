@@ -2,7 +2,7 @@ import json
 import logging
 from typing import List
 
-import sofascrape.schemas.general as sofaschema
+import sofascrape.schemas.general as sofaschema  # type: ignore
 
 import sqlsofa.schema.sqlmodels as sqlschema
 from sqlsofa.abstract import BaseComponenetConverter
