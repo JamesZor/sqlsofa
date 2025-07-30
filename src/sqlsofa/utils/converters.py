@@ -616,6 +616,11 @@ class FootballLineupResult(TypedDict):
 
 
 # Simple Converters
+def country(country: sofaschema.CountrySchema) -> sqlschema.Country:
+    """Convert country schema to SQLModel."""
+    return sqlschema.Country(**country.model_dump())
+
+
 def player_color(color: sofaschema.PlayerColorSchema) -> PlayerColorResult:
     """Convert player color schema to SQLModel."""
     return PlayerColorResult(player_color=sqlschema.PlayerColor(**color.model_dump()))
@@ -857,3 +862,456 @@ def football_lineup_standalone(
         all_players=all_players,
         all_countries=all_countries,
     )
+
+
+########################################
+## incidents
+########################################
+# Result Types
+class CoordinatesResult(TypedDict):
+    """Result from coordinates conversion."""
+
+    coordinates: sqlschema.Coordinates
+
+
+class PassingNetworkActionResult(TypedDict):
+    """Result from passing network action conversion."""
+
+    player: sqlschema.LineupPlayer
+    coordinates: List[sqlschema.Coordinates]
+
+
+class PeriodIncidentResult(TypedDict):
+    """Result from period incident conversion."""
+
+    incident: sqlschema.PeriodIncident
+
+
+class InjuryTimeIncidentResult(TypedDict):
+    """Result from injury time incident conversion."""
+
+    incident: sqlschema.InjuryTimeIncident
+
+
+class SubstitutionIncidentResult(TypedDict):
+    """Result from substitution incident conversion."""
+
+    incident: sqlschema.SubstitutionIncident
+    player_in: sqlschema.LineupPlayer
+    player_out: sqlschema.LineupPlayer
+
+
+class CardIncidentResult(TypedDict):
+    """Result from card incident conversion."""
+
+    incident: sqlschema.CardIncident
+    player: Optional[sqlschema.LineupPlayer]
+
+
+class GoalIncidentResult(TypedDict):
+    """Result from goal incident conversion."""
+
+    incident: sqlschema.GoalIncident
+    player: sqlschema.LineupPlayer
+    assist1_player: Optional[sqlschema.LineupPlayer]
+    assist2_player: Optional[sqlschema.LineupPlayer]
+    passing_network: List[PassingNetworkActionResult]
+
+
+class VarDecisionIncidentResult(TypedDict):
+    """Result from VAR decision incident conversion."""
+
+    incident: sqlschema.VarDecisionIncident
+    player: Optional[sqlschema.LineupPlayer]
+
+
+class TeamColorsIncidentResult(TypedDict):
+    """Result from team colors conversion."""
+
+    player_color: sqlschema.PlayerColor
+    goalkeeper_color: sqlschema.PlayerColor
+
+
+class FootballIncidentsResult(TypedDict):
+    """Result from complete football incidents conversion."""
+
+    incidents: List[sqlschema.Incident]
+    period_incidents: List[sqlschema.PeriodIncident]
+    injury_time_incidents: List[sqlschema.InjuryTimeIncident]
+    substitution_incidents: List[sqlschema.SubstitutionIncident]
+    card_incidents: List[sqlschema.CardIncident]
+    goal_incidents: List[sqlschema.GoalIncident]
+    var_decision_incidents: List[sqlschema.VarDecisionIncident]
+    home_colors: TeamColorsIncidentResult
+    away_colors: TeamColorsIncidentResult
+    all_players: List[sqlschema.LineupPlayer]
+    all_coordinates: List[sqlschema.Coordinates]
+
+
+# Simple Converters
+def coordinates(coord: sofaschema.CoordinatesSchema) -> CoordinatesResult:
+    """Convert coordinates schema to SQLModel."""
+    return CoordinatesResult(coordinates=sqlschema.Coordinates(**coord.model_dump()))
+
+
+def lineup_player_from_incident(
+    player: sofaschema.LineupPlayerSchema,
+) -> sqlschema.LineupPlayer:
+    """
+    Convert lineup player from incident data.
+    Similar to lineup converter but handles incident-specific fields.
+    """
+    # Prepare player data
+    player_data = player.model_dump(
+        exclude={"country", "proposedMarketValueRaw", "fieldTranslations"}
+    )
+
+    # Handle the marketValue from proposedMarketValueRaw
+    if player.proposedMarketValueRaw:
+        player_data["marketValue"] = player.proposedMarketValueRaw.value
+        player_data["marketValueCurrency_raw"] = player.proposedMarketValueRaw.currency
+
+    return sqlschema.LineupPlayer(**player_data)
+
+
+def team_colors_incident(
+    colors: sofaschema.TeamColorsIncidentSchema,
+) -> TeamColorsIncidentResult:
+    """Convert team colors from incidents."""
+    player_color = sqlschema.PlayerColor(**colors.playerColor.model_dump())
+    goalkeeper_color = sqlschema.PlayerColor(**colors.goalkeeperColor.model_dump())
+
+    return TeamColorsIncidentResult(
+        player_color=player_color, goalkeeper_color=goalkeeper_color
+    )
+
+
+# Incident Type Converters
+def period_incident(
+    incident: sofaschema.PeriodIncidentSchema, event: sqlschema.Event
+) -> PeriodIncidentResult:
+    """Convert period incident (HT, FT)."""
+    incident_data = incident.model_dump(exclude={"incidentType"})
+    incident_obj = sqlschema.PeriodIncident(**incident_data)
+    incident_obj.event = event
+    incident_obj.event_id = event.id
+
+    return PeriodIncidentResult(incident=incident_obj)
+
+
+def injury_time_incident(
+    incident: sofaschema.InjuryTimeIncidentSchema, event: sqlschema.Event
+) -> InjuryTimeIncidentResult:
+    """Convert injury time incident."""
+    incident_data = incident.model_dump(exclude={"incidentType"})
+    incident_obj = sqlschema.InjuryTimeIncident(**incident_data)
+    incident_obj.event = event
+    incident_obj.event_id = event.id
+
+    return InjuryTimeIncidentResult(incident=incident_obj)
+
+
+def substitution_incident(
+    incident: sofaschema.SubstitutionIncidentSchema, event: sqlschema.Event
+) -> SubstitutionIncidentResult:
+    """Convert substitution incident."""
+    # Convert players
+    player_in = lineup_player_from_incident(incident.playerIn)
+    player_out = lineup_player_from_incident(incident.playerOut)
+
+    # Create incident
+    incident_data = incident.model_dump(
+        exclude={"incidentType", "playerIn", "playerOut"}
+    )
+    incident_obj = sqlschema.SubstitutionIncident(**incident_data)
+
+    # Set relationships
+    incident_obj.event = event
+    incident_obj.event_id = event.id
+    incident_obj.player_in = player_in
+    incident_obj.player_out = player_out
+
+    return SubstitutionIncidentResult(
+        incident=incident_obj, player_in=player_in, player_out=player_out
+    )
+
+
+def card_incident(
+    incident: sofaschema.CardIncidentSchema, event: sqlschema.Event
+) -> CardIncidentResult:
+    """Convert card incident."""
+    # Convert player if present
+    player_obj = None
+    if incident.player:
+        player_obj = lineup_player_from_incident(incident.player)
+
+    # Create incident
+    incident_data = incident.model_dump(exclude={"incidentType", "player"})
+    incident_obj = sqlschema.CardIncident(**incident_data)
+
+    # Set relationships
+    incident_obj.event = event
+    incident_obj.event_id = event.id
+    if player_obj:
+        incident_obj.player = player_obj
+
+    return CardIncidentResult(incident=incident_obj, player=player_obj)
+
+
+def passing_network_action(
+    action: sofaschema.PassingNetworkActionSchema,
+) -> PassingNetworkActionResult:
+    """Convert passing network action from goal incident."""
+    # Convert player
+    player = lineup_player_from_incident(action.player)
+
+    # Convert all coordinates
+    coords = []
+    if action.playerCoordinates:
+        coords.append(sqlschema.Coordinates(**action.playerCoordinates.model_dump()))
+    if action.passEndCoordinates:
+        coords.append(sqlschema.Coordinates(**action.passEndCoordinates.model_dump()))
+    if action.gkCoordinates:
+        coords.append(sqlschema.Coordinates(**action.gkCoordinates.model_dump()))
+    if action.goalShotCoordinates:
+        coords.append(sqlschema.Coordinates(**action.goalShotCoordinates.model_dump()))
+    if action.goalMouthCoordinates:
+        coords.append(sqlschema.Coordinates(**action.goalMouthCoordinates.model_dump()))
+
+    return PassingNetworkActionResult(player=player, coordinates=coords)
+
+
+def goal_incident(
+    incident: sofaschema.GoalIncidentSchema, event: sqlschema.Event
+) -> GoalIncidentResult:
+    """Convert goal incident with passing network."""
+    # Convert main player
+    player = lineup_player_from_incident(incident.player)
+
+    # Convert assist players if present
+    assist1_player = None
+    if incident.assist1:
+        assist1_player = lineup_player_from_incident(incident.assist1)
+
+    assist2_player = None
+    if incident.assist2:
+        assist2_player = lineup_player_from_incident(incident.assist2)
+
+    # Convert passing network if present
+    passing_network = []
+    if incident.footballPassingNetworkAction:
+        for action in incident.footballPassingNetworkAction:
+            passing_network.append(passing_network_action(action))
+
+    # Create incident
+    incident_data = incident.model_dump(
+        exclude={
+            "incidentType",
+            "player",
+            "assist1",
+            "assist2",
+            "footballPassingNetworkAction",
+        }
+    )
+    incident_obj = sqlschema.GoalIncident(**incident_data)
+
+    # Set relationships
+    incident_obj.event = event
+    incident_obj.event_id = event.id
+    incident_obj.player = player
+    if assist1_player:
+        incident_obj.assist1_player = assist1_player
+    if assist2_player:
+        incident_obj.assist2_player = assist2_player
+
+    return GoalIncidentResult(
+        incident=incident_obj,
+        player=player,
+        assist1_player=assist1_player,
+        assist2_player=assist2_player,
+        passing_network=passing_network,
+    )
+
+
+def var_decision_incident(
+    incident: sofaschema.VarDecisionIncidentSchema, event: sqlschema.Event
+) -> VarDecisionIncidentResult:
+    """Convert VAR decision incident."""
+    # Convert player if present
+    player_obj = None
+    if incident.player:
+        player_obj = lineup_player_from_incident(incident.player)
+
+    # Create incident
+    incident_data = incident.model_dump(exclude={"incidentType", "player"})
+    incident_obj = sqlschema.VarDecisionIncident(**incident_data)
+
+    # Set relationships
+    incident_obj.event = event
+    incident_obj.event_id = event.id
+    if player_obj:
+        incident_obj.player = player_obj
+
+    return VarDecisionIncidentResult(incident=incident_obj, player=player_obj)
+
+
+def process_incident(
+    incident: Union[
+        sofaschema.PeriodIncidentSchema,
+        sofaschema.InjuryTimeIncidentSchema,
+        sofaschema.SubstitutionIncidentSchema,
+        sofaschema.CardIncidentSchema,
+        sofaschema.GoalIncidentSchema,
+        sofaschema.VarDecisionIncidentSchema,
+    ],
+    event: sqlschema.Event,
+) -> Union[
+    PeriodIncidentResult,
+    InjuryTimeIncidentResult,
+    SubstitutionIncidentResult,
+    CardIncidentResult,
+    GoalIncidentResult,
+    VarDecisionIncidentResult,
+]:
+    """Process a single incident based on its type."""
+    if isinstance(incident, sofaschema.PeriodIncidentSchema):
+        return period_incident(incident, event)
+    elif isinstance(incident, sofaschema.InjuryTimeIncidentSchema):
+        return injury_time_incident(incident, event)
+    elif isinstance(incident, sofaschema.SubstitutionIncidentSchema):
+        return substitution_incident(incident, event)
+    elif isinstance(incident, sofaschema.CardIncidentSchema):
+        return card_incident(incident, event)
+    elif isinstance(incident, sofaschema.GoalIncidentSchema):
+        return goal_incident(incident, event)
+    elif isinstance(incident, sofaschema.VarDecisionIncidentSchema):
+        return var_decision_incident(incident, event)
+    else:
+        raise ValueError(f"Unknown incident type: {type(incident)}")
+
+
+def football_incidents(
+    incidents: sofaschema.FootballIncidentsSchema, event: sqlschema.Event
+) -> FootballIncidentsResult:
+    """
+    Convert complete football incidents with all types.
+    """
+    # Convert team colors
+    home_colors = team_colors_incident(incidents.home)
+    away_colors = team_colors_incident(incidents.away)
+
+    # Process all incidents
+    all_incidents = []
+    period_incidents = []
+    injury_time_incidents = []
+    substitution_incidents = []
+    card_incidents = []
+    goal_incidents = []
+    var_decision_incidents = []
+    all_players = []
+    all_coordinates = []
+
+    for incident_schema in incidents.incidents:
+        result = process_incident(incident_schema, event)
+        result_type = type(result)
+
+        # Add to appropriate lists based on type
+        if result_type == PeriodIncidentResult:
+            period_incidents.append(result["incident"])
+            all_incidents.append(result["incident"])
+        elif result_type == InjuryTimeIncidentResult:
+            injury_time_incidents.append(result["incident"])
+            all_incidents.append(result["incident"])
+        elif result_type == SubstitutionIncidentResult:
+            substitution_incidents.append(result["incident"])
+            all_incidents.append(result["incident"])
+            all_players.extend([result["player_in"], result["player_out"]])
+        elif result_type == CardIncidentResult:
+            card_incidents.append(result["incident"])
+            all_incidents.append(result["incident"])
+            if result["player"]:
+                all_players.append(result["player"])
+        elif result_type == GoalIncidentResult:
+            goal_incidents.append(result["incident"])
+            all_incidents.append(result["incident"])
+            all_players.append(result["player"])
+            if result["assist1_player"]:
+                all_players.append(result["assist1_player"])
+            if result["assist2_player"]:
+                all_players.append(result["assist2_player"])
+            # Collect players and coordinates from passing network
+            for action in result["passing_network"]:
+                all_players.append(action["player"])
+                all_coordinates.extend(action["coordinates"])
+        elif result_type == VarDecisionIncidentResult:
+            var_decision_incidents.append(result["incident"])
+            all_incidents.append(result["incident"])
+            if result["player"]:
+                all_players.append(result["player"])
+
+    # Create generic Incident objects for the main relationship
+    generic_incidents = []
+    for inc in all_incidents:
+        generic_inc = sqlschema.Incident(
+            incidentType=type(inc).__name__.replace("Incident", "").lower(),
+            time=getattr(inc, "time", None),
+            addedTime=getattr(inc, "addedTime", None),
+            isHome=getattr(inc, "isHome", None),
+            event=event,
+            event_id=event.id,
+        )
+        generic_incidents.append(generic_inc)
+
+    return FootballIncidentsResult(
+        incidents=generic_incidents,
+        period_incidents=period_incidents,
+        injury_time_incidents=injury_time_incidents,
+        substitution_incidents=substitution_incidents,
+        card_incidents=card_incidents,
+        goal_incidents=goal_incidents,
+        var_decision_incidents=var_decision_incidents,
+        home_colors=home_colors,
+        away_colors=away_colors,
+        all_players=all_players,
+        all_coordinates=all_coordinates,
+    )
+
+
+# Standalone version without event linking
+def football_incidents_standalone(
+    incidents: sofaschema.FootballIncidentsSchema,
+) -> FootballIncidentsResult:
+    """
+    Convert football incidents without linking to event.
+    Useful for converting incidents before you have the event object.
+    """
+    # Create a dummy event for now (will be replaced later)
+    dummy_event = sqlschema.Event(id=0, slug="temp", startTimestamp=0)
+
+    # Use the main converter
+    result = football_incidents(incidents, dummy_event)
+
+    # Clear the event references
+    for inc in result["incidents"]:
+        inc.event = None
+        inc.event_id = None
+    for inc in result["period_incidents"]:
+        inc.event = None
+        inc.event_id = None
+    for inc in result["injury_time_incidents"]:
+        inc.event = None
+        inc.event_id = None
+    for inc in result["substitution_incidents"]:
+        inc.event = None
+        inc.event_id = None
+    for inc in result["card_incidents"]:
+        inc.event = None
+        inc.event_id = None
+    for inc in result["goal_incidents"]:
+        inc.event = None
+        inc.event_id = None
+    for inc in result["var_decision_incidents"]:
+        inc.event = None
+        inc.event_id = None
+
+    return result

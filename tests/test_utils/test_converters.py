@@ -1,6 +1,7 @@
 import json
 import pprint
-from typing import List
+from collections import defaultdict
+from typing import Dict, List
 
 import pytest  # type: ignore
 import sofascrape.schemas.general as sofaschemas
@@ -52,6 +53,13 @@ def footballMatchLineup() -> sofaschemas.FootballLineupSchema:
     nbu = NotebookUtils(type=NoteBookType.FOOTBALL, web_on=False)
     raw_data = nbu.load(file_name="football_lineup_12436870")
     return sofaschemas.FootballLineupSchema.model_validate(raw_data)
+
+
+@pytest.fixture
+def footballMatchIncident() -> sofaschemas.FootballIncidentsSchema:
+    nbu = NotebookUtils(type=NoteBookType.FOOTBALL, web_on=False)
+    raw_data = nbu.load(file_name="football_incidents_12436870")
+    return sofaschemas.FootballIncidentsSchema.model_validate(raw_data)
 
 
 def test_tournament(tournamentData):
@@ -368,3 +376,171 @@ def print_player_statistics_example(lineup_result: dict):
             if stats.goalAssist:
                 print(f"  Assists: {stats.goalAssist}")
             break  # Just show one example
+
+
+def test_incident(footballMatchIncident):
+    print("")
+    print("=" * 30)
+    print(footballMatchIncident.model_dump_json(indent=8))
+
+
+def test_incidents_converter(footballMatchIncident):
+    """Test the incidents converter with example data."""
+
+    # Parse to Pydantic schema
+    incidents_schema = footballMatchIncident
+
+    # Create a test event
+    test_event = sqlschema.Event(
+        id=12436870, slug="manchester-united-vs-fulham", startTimestamp=1234567890
+    )
+
+    # Convert incidents
+    print(incidents_schema.model_dump_json(indent=8))
+    result = converter.football_incidents(incidents_schema, test_event)
+    pprint.pprint(result, indent=6, width=100)
+    # Print summary
+    print("Incidents Conversion Summary")
+    print("=" * 50)
+    print(f"Event ID: {test_event.id}")
+    print(f"Total incidents: {len(result['incidents'])}")
+    print()
+
+    # Incident type breakdown
+    print("Incident Types:")
+    print(f"  Period incidents: {len(result['period_incidents'])}")
+    print(f"  Injury time incidents: {len(result['injury_time_incidents'])}")
+    print(f"  Substitution incidents: {len(result['substitution_incidents'])}")
+    print(f"  Card incidents: {len(result['card_incidents'])}")
+    print(f"  Goal incidents: {len(result['goal_incidents'])}")
+    print(f"  VAR decision incidents: {len(result['var_decision_incidents'])}")
+
+    # Timeline
+    print("\nMatch Timeline:")
+    timeline = create_timeline(result)
+    for time, incidents in sorted(timeline.items()):
+        for inc in incidents:
+            print(f"  {time}': {inc}")
+
+    # Goal details
+    print("\nGoal Details:")
+    for goal in result["goal_incidents"]:
+        print(f"  {goal.time}' - {goal.player.name}")
+        if goal.assist1_player:
+            print(f"    Assist: {goal.assist1_player.name}")
+        print(f"    Score: {goal.homeScore}-{goal.awayScore}")
+        print(f"    Type: {goal.incidentClass}")
+
+    # Cards summary
+    print("\nCards Summary:")
+    for card in result["card_incidents"]:
+        player_name = card.player.name if card.player else card.playerName
+        print(f"  {card.time}' - {player_name} ({card.incidentClass} card)")
+        if card.reason:
+            print(f"    Reason: {card.reason}")
+
+    # Substitutions
+    print("\nSubstitutions:")
+    home_subs = [s for s in result["substitution_incidents"] if s.isHome]
+    away_subs = [s for s in result["substitution_incidents"] if not s.isHome]
+
+    print("  Home:")
+    for sub in home_subs:
+        print(f"    {sub.time}' - {sub.player_out.name} → {sub.player_in.name}")
+
+    print("  Away:")
+    for sub in away_subs:
+        print(f"    {sub.time}' - {sub.player_out.name} → {sub.player_in.name}")
+
+    # Unique players involved
+    unique_players = get_unique_players(result)
+    print(f"\nTotal unique players in incidents: {len(unique_players)}")
+
+    # Relationship verification
+    print("\n" + "=" * 50)
+    print("Relationship Verification:")
+    verify_relationships(result)
+
+    return result
+
+
+def create_timeline(result: dict) -> Dict[int, List[str]]:
+    """Create a timeline of incidents."""
+    timeline = defaultdict(list)
+
+    for period in result["period_incidents"]:
+        timeline[period.time].append(f"{period.text}")
+
+    for injury in result["injury_time_incidents"]:
+        timeline[injury.time].append(f"+{injury.length} min injury time")
+
+    for sub in result["substitution_incidents"]:
+        team = "Home" if sub.isHome else "Away"
+        timeline[sub.time].append(
+            f"{team} sub: {sub.player_out.name} → {sub.player_in.name}"
+        )
+
+    for card in result["card_incidents"]:
+        player_name = card.player.name if card.player else card.playerName
+        team = "Home" if card.isHome else "Away"
+        timeline[card.time].append(f"{team} {card.incidentClass} card: {player_name}")
+
+    for goal in result["goal_incidents"]:
+        team = "Home" if goal.isHome else "Away"
+        scorer = goal.player.name
+        assist = f" (assist: {goal.assist1_player.name})" if goal.assist1_player else ""
+        timeline[goal.time].append(f"{team} GOAL: {scorer}{assist}")
+
+    return timeline
+
+
+def verify_relationships(result: dict):
+    """Verify that relationships are properly set."""
+    # Check that all incidents have event references
+    all_have_event = all(
+        inc.event_id == 12436870
+        for inc in result["period_incidents"]
+        + result["injury_time_incidents"]
+        + result["substitution_incidents"]
+        + result["card_incidents"]
+        + result["goal_incidents"]
+        + result["var_decision_incidents"]
+    )
+    print(f"All incidents linked to event: {all_have_event}")
+
+    # Check substitution relationships
+    sub_relationships_ok = all(
+        sub.player_in is not None and sub.player_out is not None
+        for sub in result["substitution_incidents"]
+    )
+    print(f"All substitutions have player relationships: {sub_relationships_ok}")
+
+    # Check goal relationships
+    goal_relationships_ok = all(
+        goal.player is not None for goal in result["goal_incidents"]
+    )
+    print(f"All goals have scorer relationships: {goal_relationships_ok}")
+
+    # Check card relationships (some might not have player if only playerName is provided)
+    cards_with_players = sum(
+        1 for card in result["card_incidents"] if card.player is not None
+    )
+    print(
+        f"Cards with player relationships: {cards_with_players}/{len(result['card_incidents'])}"
+    )
+
+
+def analyze_goal_passing_network(result: dict):
+    """Analyze the passing network for goals."""
+    print("\n" + "=" * 50)
+    print("Goal Passing Network Analysis:")
+
+    for i, goal in enumerate(result["goal_incidents"]):
+        print(f"\nGoal {i+1} - {goal.player.name} ({goal.time}')")
+
+        # Get the passing network from the original data
+        # (Note: The passing network details are not stored in SQLModel currently)
+        # This would need to be enhanced if you want to store the full passing network
+        print("  Passing sequence:")
+        print("    [Passing network data not currently stored in SQLModel]")
+        print("    Consider adding PassingNetworkAction table if needed")
