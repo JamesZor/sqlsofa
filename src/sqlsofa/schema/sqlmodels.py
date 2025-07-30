@@ -237,7 +237,7 @@ class Manager(HashBaseSQLModel, table=True):  # type: ignore
     created_at: datetime = Field(default_factory=datetime.now)
 
     # Foreign keys
-    country_id: Optional[int] = Field(default=None, foreign_key="countries.id")
+    country_slug: Optional[str] = Field(default=None, foreign_key="countries.slug")
 
     # Relationships
     country: Optional[Country] = Relationship(back_populates="managers")

@@ -256,7 +256,7 @@ def tournament(tournament: sofaschema.TournamentSchema) -> TournamentResult:
     )
 
 
-def team(team_schema: sofaschema.TeamSchema) -> TeamResult:
+def team(team_schema: sofaschema.TeamSchema) -> Dict[str, Any]:
     """
     Enhanced version of your team converter with foreign keys.
     Returns all team-related objects with proper relationships.
@@ -279,12 +279,12 @@ def team(team_schema: sofaschema.TeamSchema) -> TeamResult:
         }
     )
 
-    return TeamResult(
-        sport=sport_obj,
-        country=country_obj,
-        team_colors=team_colors_obj,
-        team=sqlschema.Team(**team_data),
-    )
+    return {
+        "sport": sport_obj,
+        "country": country_obj,
+        "team_colors": team_colors_obj,
+        "team": sqlschema.Team(**team_data),
+    }
 
 
 def event(event: sofaschema.EventSchema) -> EventResult:
@@ -616,9 +616,6 @@ class FootballLineupResult(TypedDict):
 
 
 # Simple Converters
-def country(country: sofaschema.CountrySchema) -> sqlschema.Country:
-    """Convert country schema to SQLModel."""
-    return sqlschema.Country(**country.model_dump())
 
 
 def player_color(color: sofaschema.PlayerColorSchema) -> PlayerColorResult:
